@@ -1,2 +1,5 @@
+flask
+flask-cors
+capstone
 pyelftools==0.32
 pytest==8.4.0
