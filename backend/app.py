@@ -3,7 +3,12 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import json
 import os
+import sys
 import time
+
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from pipeline import run_pipeline
 from responder import respond
@@ -12,7 +17,7 @@ from reporter import generate_report
 APP_START_TIME = time.time()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173"])
+CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173"])
 
 app.config.setdefault("INCIDENTS_DIR", os.path.join(".", "incidents"))
 app.config.setdefault("WHITELIST_PATH", os.path.join(".", "whitelist.json"))
@@ -27,9 +32,9 @@ def json_error(message, status_code):
 def validate():
     try:
         data = request.get_json(silent=True) or {}
-        source = data.get("source_path")
-        suspect = data.get("suspect_compiler")
-        trusted = data.get("trusted_compiler")
+        source = data.get("source_path") or data.get("source")
+        suspect = data.get("suspect_compiler") or data.get("suspect")
+        trusted = data.get("trusted_compiler") or data.get("trusted")
 
         if not all([source, suspect, trusted]):
             return json_error("Missing required fields", 400)
@@ -48,6 +53,7 @@ def validate():
 
         return jsonify(
             {
+                "trust_score": pr.get("trust_score"),
                 "score": pr.get("trust_score"),
                 "verdict": pr.get("verdict"),
                 "crack_type": pr.get("crack_type"),

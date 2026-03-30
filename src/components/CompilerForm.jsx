@@ -3,8 +3,8 @@ import { motion } from "framer-motion";
 
 export default function CompilerForm({ onSubmit }) {
     const [source, setSource] = useState("samples/clean.c");
-    const [suspect, setSuspect] = useState("./fake_compiler.py");
-    const [trusted, setTrusted] = useState("/usr/bin/gcc");
+    const [suspect, setSuspect] = useState("backend/fake_compiler.py");
+    const [trusted, setTrusted] = useState("gcc");
 
     const fields = [
         { label: "SOURCE FILE PATH", value: source, set: setSource, icon: "📁" },

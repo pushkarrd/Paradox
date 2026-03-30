@@ -13,8 +13,48 @@ import Scanlines from "./components/Scanlines";
 import ScoreGauge from "./components/ScoreGauge";
 import ToastStack from "./components/ToastStack";
 import VerdictBanner from "./components/VerdictBanner";
-import { MOCK_RESULT, PAST_INCIDENTS } from "./data/dashboardData";
 import { normalizeResult } from "./utils/normalizeResult";
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+
+function toRelativeTime(timestamp) {
+  if (!timestamp) {
+    return "unknown";
+  }
+
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return "unknown";
+  }
+
+  const diffMs = Date.now() - parsed.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  if (diffMinutes < 1) {
+    return "just now";
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
+function mapIncident(raw, index) {
+  const timestamp = raw.timestamp || raw.time || raw.created_at || null;
+  return {
+    id: raw.id || raw.incident_id || `INC-${index + 1}`,
+    verdict: raw.verdict || "SUSPICIOUS",
+    score: Number.isFinite(raw.trust_score) ? raw.trust_score : raw.score,
+    type: raw.crack_type || "unknown",
+    time: toRelativeTime(timestamp),
+  };
+}
 
 export default function App() {
   const [phase, setPhase] = useState("input");
@@ -22,7 +62,27 @@ export default function App() {
   const [pipelineFinished, setPipelineFinished] = useState(false);
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 1080);
   const [toasts, setToasts] = useState([]);
+  const [incidents, setIncidents] = useState([]);
+  const [incidentError, setIncidentError] = useState("");
   const toastTimers = useRef(new Map());
+
+  const loadIncidents = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/incidents`);
+      if (!response.ok) {
+        throw new Error(`Incident API failed: ${response.status}`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error("Incident API returned invalid payload");
+      }
+      setIncidents(data.map(mapIncident));
+      setIncidentError("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load incidents";
+      setIncidentError(message);
+    }
+  };
 
   const dismissToast = (id) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -60,16 +120,26 @@ export default function App() {
     [],
   );
 
+  useEffect(() => {
+    loadIncidents();
+    const interval = setInterval(loadIncidents, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSubmit = async (payload) => {
     setResult(null);
     setPipelineFinished(false);
     setPhase("loading");
 
     try {
-      const response = await fetch("http://localhost:5000/api/validate", {
+      const response = await fetch(`${API_BASE_URL}/api/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          source_path: payload.source,
+          suspect_compiler: payload.suspect,
+          trusted_compiler: payload.trusted,
+        }),
       });
 
       if (!response.ok) {
@@ -77,12 +147,23 @@ export default function App() {
       }
 
       const data = await response.json();
-      setResult(normalizeResult(data));
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      const normalized = normalizeResult(data);
+      if (!normalized) {
+        throw new Error("Validation API returned invalid response");
+      }
+
+      setResult(normalized);
+      await loadIncidents();
       pushToast("Validation complete.", "success", 2400);
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 2600));
-      setResult(MOCK_RESULT);
-      pushToast("Backend unavailable. Showing mock incident data.", "warning", 4200);
+    } catch (error) {
+      setPhase("input");
+      setPipelineFinished(false);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      pushToast(`Validation failed: ${message}`, "warning", 4200);
     }
   };
 
@@ -121,7 +202,19 @@ export default function App() {
             <motion.div key="input" exit={{ opacity: 0, y: -20 }}>
               <CompilerForm onSubmit={handleSubmit} />
               <div style={{ maxWidth: 580, margin: "0 auto" }}>
-                <IncidentHistory incidents={PAST_INCIDENTS} />
+                <IncidentHistory incidents={incidents} />
+                {incidentError && (
+                  <div
+                    style={{
+                      fontFamily: "'Share Tech Mono', monospace",
+                      fontSize: 11,
+                      color: "#f59e0b",
+                      marginTop: 10,
+                    }}
+                  >
+                    Live incident stream unavailable: {incidentError}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -176,7 +269,7 @@ export default function App() {
                   >
                     <ScoreGauge score={result.trust_score} />
                   </Card>
-                  <IncidentHistory incidents={PAST_INCIDENTS} />
+                  <IncidentHistory incidents={incidents} />
                 </div>
               </div>
             </motion.div>

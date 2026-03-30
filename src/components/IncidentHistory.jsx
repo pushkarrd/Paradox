@@ -21,6 +21,11 @@ export default function IncidentHistory({ incidents }) {
             >
                 PAST INCIDENTS
             </div>
+            {incidents.length === 0 && (
+                <div style={{ fontFamily: "monospace", fontSize: 12, color: "#4a5568" }}>
+                    No incidents yet. Run validation to populate live data.
+                </div>
+            )}
             {incidents.map((incident, index) => (
                 <motion.div
                     key={incident.id}
