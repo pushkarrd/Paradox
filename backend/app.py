@@ -17,7 +17,8 @@ from reporter import generate_report
 APP_START_TIME = time.time()
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173", "http://127.0.0.1:5173"])
+# Allow CORS for development - any localhost port can access the API
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:*", "127.0.0.1"], "supports_credentials": True}})
 
 app.config.setdefault("INCIDENTS_DIR", os.path.join(".", "incidents"))
 app.config.setdefault("WHITELIST_PATH", os.path.join(".", "whitelist.json"))
