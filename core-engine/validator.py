@@ -1,36 +1,35 @@
 import subprocess
+import shlex
 import os
 
-# ----------------------------------------
-# Helper function to compile using 1 compiler
-# ----------------------------------------
+
 def compile_source(source_path, compiler_path, output_path, timeout=30):
     try:
+        cmd = compiler_path if isinstance(compiler_path, list) else [compiler_path]
+        cmd = cmd + [source_path, "-o", output_path]
+
         result = subprocess.run(
-            [compiler_path, source_path, "-o", output_path],
+            cmd,
             capture_output=True,
             text=True,
             timeout=timeout
         )
 
-        # If compilation failed
+        print("Running Command:", cmd)   # 👈 DEBUG
+
         if result.returncode != 0:
+            print("[INFO] Compiler Error:", result.stderr)
+            print("STDOUT:", result.stdout)
             return None, result.stderr
 
         return output_path, None
 
-    except subprocess.TimeoutExpired:
-        return None, "Compiler timed out after 30 seconds"
-
-    except FileNotFoundError:
-        return None, f"Compiler not found: {compiler_path}"
-
-
-# ----------------------------------------
-# Main function (called by pipeline)
-# ----------------------------------------
-def validate(source_path, suspect_compiler, trusted_compiler, output_dir="./temp"):
+    except Exception as e:
+        return None, str(e)
     
+
+def validate(source_path, suspect_compiler, trusted_compiler, output_dir="./temp"):
+
     # Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
 

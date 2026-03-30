@@ -17,6 +17,12 @@ def run_pipeline(source_path, suspect_compiler, trusted_compiler):
     if paths["errors"]["trusted"]:
         return {"error": paths["errors"]["trusted"]}
 
+    if not paths["suspect"] or not paths["trusted"]:
+        return {
+            "error": "Compilation failed",
+            "details": paths["errors"]
+        }
+
     # Step 2: Compare binaries
     diffs, size_delta = compare_binaries(
         paths["suspect"], paths["trusted"]
